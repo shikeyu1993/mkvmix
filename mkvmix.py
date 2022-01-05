@@ -122,7 +122,6 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         audiopathrex = config["mkvmix"]["audiopathrex"].split(',')
 
         self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.episodeButton.setChecked(True)
         self.startButton.setEnabled(False)
         self.confirmButton.setEnabled(False)
         self.deleButton.setEnabled(False)
@@ -146,9 +145,10 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         self.checkButton.clicked.connect(self.check)
         self.startButton.clicked.connect(self.run)
         self.confirmButton.clicked.connect(self.confirmChange)
-        self.renameCheckBox.clicked.connect(self.showLine)
+        self.renameEpisodeCheckBox.clicked.connect(self.showLine)
         self.delCheckBox.clicked.connect(self.changeRenameButton)
         self.deleButton_2.clicked.connect(self.tableDelete1)
+        self.initepisodeEdit.setText('0')
         self.filepathrexBox.addItems(filepathrex)
         self.subpathrexBox.addItems(subpathrex)
         self.audiopathrexBox.addItems(audiopathrex)
@@ -163,7 +163,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
     显示提示，取消删除和重命名CheckBox
     """
     def showLine(self):
-        if self.renameCheckBox.isChecked():
+        if self.renameEpisodeCheckBox.isChecked():
             self.delCheckBox.setChecked(False)
             self.CMDBrowser.append("请在字幕路径中输入剧名...")
 
@@ -172,7 +172,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
     """
     def changeRenameButton(self):
         if self.delCheckBox.isChecked():
-            self.renameCheckBox.setChecked(False)
+            self.renameEpisodeCheckBox.setChecked(False)
 
     """
     other command选中第一行时不允许使用删除按钮
@@ -235,7 +235,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
             for i, otherdict in enumerate(otherlist):
                 otherfilelist = self.filter(self.path2list(otherdict['filepath'], '.mkv'), self.keywordlist)
                 reslist = self.gettogether(reslist, otherfilelist, 'otherfile' + str(i), otherdict['filepath'], self.filerex,
-                                           self.otherfilerex)
+                                           self.otherfilerex, self.filetype)
             for filedict in reslist:
                 for i, otherdict in enumerate(otherlist):
                     filedict.update({'othercommand' + str(i): otherdict['command']})
@@ -252,29 +252,14 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         self.subpath = self.subpathEdit.text()
         if os.path.isdir(self.subpath):
             self.subpathrex = self.subpathrexBox.currentText()
-            self.subfiletype = '.'+self.subfiletypeBox.currentText()
-            if self.episodeButton.isChecked():
-                if self.filerex == '':
-                    self.CMDBrowser.clear()
-                    self.CMDBrowser.append("文件检索方式为空，请使用按名字匹配")
-                    self.errflag = True
-                else:
-                    logger.info('subComd: sub mode 1 (eposode)')
-                    sublist = self.filter(self.path2list(self.subpath, self.subfiletype), self.keywordlist)
-                    if len(sublist) == 0:
-                        self.CMDBrowser.append("未找到{}格式文件".format(self.subfiletype))
-                    else:
-                        reslist = self.gettogether(reslist, sublist, 'subname', self.subpath, self.filerex,
-                                                   self.subpathrex)
-                        logger.info('subComd: "reslist":{}'.format(reslist))
-            elif self.nameButton.isChecked():
-                logger.info('subComd: sub mode 2 (name)')
-                sublist = self.filter(self.path2list(self.subpath, self.subfiletype), self.keywordlist)
-                if len(sublist) == 0:
-                    self.CMDBrowser.append("未找到{}格式字幕".format(self.subfiletype))
-                    self.errflag = True
-                else:
-                    reslist = self.gettogether_1(reslist, sublist)
+            self.subfiletype = self.subfiletypeBox.currentText()
+            sublist = self.filter(self.path2list(self.subpath, self.subfiletype), self.keywordlist)
+            if len(sublist) == 0:
+                self.CMDBrowser.append("未找到{}格式文件".format(self.subfiletype))
+            else:
+                reslist = self.gettogether(reslist, sublist, 'subname', self.subpath, self.filerex,
+                                           self.subpathrex, self.filetype)
+                logger.info('subComd: "reslist":{}'.format(reslist))
             if len(reslist) != 0 and not self.errflag:
                 for filedict in reslist:
                     filedict.update({'subcommand': "--language 0:zh --default-track 0:yes"})
@@ -293,12 +278,13 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         if os.path.isdir(self.audiopath):
             logger.info('audioComd: "filelist":{}'.format(reslist))
             audiolist = self.filter(self.path2list(self.audiopath, '.'+self.audiofiletype), self.keywordlist)
+            logger.info('audioComd: "audiolist":{}'.format(audiolist))
             if len(audiolist) == 0:
                 self.errflag = True
                 self.CMDBrowser.append("未找到{}格式音轨".format(self.audiofiletype))
             else:
                 reslist = self.gettogether(reslist, audiolist, 'audioname', self.audiopath,
-                                           self.filerex, self.audiorex)
+                                           self.filerex, self.audiorex, self.filetype)
             if len(reslist) != 0 and not self.errflag:
                 for filedict in reslist:
                     filedict.update({"audiocommand": "--audio-tracks {} --no-video --no-subtitles --no-chapters --language 1:en".format(str(self.audioorder))})
@@ -312,7 +298,6 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         self.filepath = self.filepathEdit.text()
         self.filerex = self.filepathrexBox.currentText()
         self.filetype = self.filetypeBox.currentText()
-        print(self.filerex)
         if os.path.isdir(self.filepath):
             filelist = self.filter(self.path2list(self.filepath, '.' + self.filetype), self.keywordlist)
             if len(filelist) == 0:
@@ -503,14 +488,14 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         QMetaObject.connectSlotsByName(self.searchEdit)
         for i, commandstr in enumerate(commandstrlist[0]):
             if len(commandstr) <= 40:
-                self.tableWidget.setColumnWidth(i, int(1/len(commandstr)*110)+len(commandstr)*6)
+                self.tableWidget.setColumnWidth(i, int(1/len(commandstr)*100)+len(commandstr)*6)
             else:
                 self.tableWidget.setColumnWidth(i, 350)
         self._delegate = HighlightDelegate(self.tableWidget)
         self.tableWidget.setItemDelegate(self._delegate)
         self.searchEdit.textChanged.connect(self.on_textChanged)
         words_in_columns = []
-        for num in range(0, (tablerow+2)):
+        for num in range(self.initepisode, self.initepisode + tablerow+2):
             number = str(num).rjust(2, '0')
             number1 = self.filerex.replace('$', number)
             words_in_columns.append(number1)
@@ -538,44 +523,32 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
         self.season = self.seasonBox.currentText()
         logger.info('showEpisodeInfo: season: {}'.format(self.season))
         self.episodename = self.subpathEdit.text()
-        if os.path.isdir(self.filepath):
-            filelist = self.filter(self.path2list(self.filepath, '.mkv'), self.keywordlist)
-            if len(filelist) == 0:
-                self.errflag = True
-                self.CMDBrowser.append("未发现mkv格式视频")
-            if not self.errflag:
-                reslist = self.gettogether_2(filelist, self.filerex)
-                logger.info('showEpisodeInfo: reslist: {}'.format(reslist))
-                if len(reslist) == 0:
-                    self.CMDBrowser.append('未发现视频源，请检查匹配格式是否正确...')
-                    self.errflag = True
-                else:
-                    episodelist = []
-                    eposodlen = len(reslist)
-                    episodealllist = []
-                    rex = self.filepathrexBox.currentText()
-                    for num in range(0, eposodlen + 10):
-                        number = str(num).rjust(2, '0')
-                        number_1 = rex.replace('$', number)
-                        episodealllist.append(number_1)
-                    for resdict in reslist:
-                        for num, episode in enumerate(episodealllist):
-                            if episode in resdict["filename"]:
-                                number = str(num).rjust(2, '0')
-                                resdict.update({'episode': number,
-                                                'season': self.season})
-                                break
-                    logger.info('showEpisodeInfo: reslist: {}'.format(reslist))
-                    rstlist = [item for item in reslist if 'season' in item]
-                    logger.info('showCommand: showEpisodeInfo:{}'.format(rstlist))
+        reslist = self.fileFilter()
+        if not self.errflag:
+            eposodlen = len(reslist)
+            episodelist = []
+            episodealllist = []
+            rex = self.filepathrexBox.currentText()
+            for num in range(self.initepisode, self.initepisode + eposodlen + 1):
+                number = str(num).rjust(2, '0')
+                number_1 = rex.replace('$', number)
+                for filedict in reslist:
+                    if number_1 in filedict['filename'].upper():
+                        filedict.update({'episode': number,
+                                        'season': self.season})
+                        break
+            logger.info('showEpisodeInfo: reslist: {}'.format(reslist))
+            rstlist = [item for item in reslist if 'season' in item]
+            logger.info('showCommand: showEpisodeInfo:{}'.format(rstlist))
 
-                    for resdict in rstlist:
-                        episodelist.append([self.episodename, resdict['filepathname'], str(resdict['season']), str(resdict['episode'])])
-                    logger.info('showEpisodeInfo: episodelist:{}'.format(episodelist))
-                    for i in episodelist:
-                        showstr = i[0] + ' - ' + 'S' + i[2] + 'E' + i[3]+' - ' + i[1]
-                        self.CMDBrowser.append(showstr)
-                    return episodelist
+            for resdict in rstlist:
+                episodelist.append([self.episodename, resdict['filepathname'], str(resdict['season']), str(resdict['episode'])])
+            logger.info('showEpisodeInfo: episodelist:{}'.format(episodelist))
+            for i in episodelist:
+                showstr = i[0] + ' - ' + 'S' + i[2] + 'E' + i[3]+' - ' + i[1]
+                self.CMDBrowser.append(showstr)
+
+            return episodelist
 
     def on_textChanged(self, text):
         self._delegate.setFilters(list(set(text.split())))
@@ -605,7 +578,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                     commandlist.append(self.tableWidget.item(i, j).text())
                 commandstrlist.append(commandlist)
             self.CMDBrowser.append("确认修改成功!")
-            if self.renameCheckBox.isChecked():
+            if self.renameEpisodeCheckBox.isChecked():
                 for i in commandstrlist:
                     showstr = i[0] + ' - ' + 'S' + i[2] + 'E' + i[3]+' - ' + i[1]
                     self.CMDBrowser.append(showstr)
@@ -657,14 +630,32 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
             str1 = str1.strip()
         return str1
 
+    def renameSub(self):
+        self.errflag = False
+        reslist = self.fileFilter()
+        remansublist = []
+        if not self.errflag:
+            reslist = self.subComd(reslist)
+            for filedict in reslist:
+                filename = filedict['filename']
+                subrename = filename.replace(self.filetype, self.subfiletype)
+                subpath = os.path.dirname(filedict['subnamepath'].strip('"'))
+                subrenamepath = os.path.join(subpath, subrename)
+                remansublist.append([filedict['subnamepath'].strip('"'), subrenamepath])
+                logger.info('renameSub: remansublist:{}'.format(remansublist))
+            self.showCommand(remansublist)
+            return remansublist
+
     def check(self):
+        self.initepisode = int(self.initepisodeEdit.text())
+        self.subfiletype = self.subfiletypeBox.currentText()
         self.onlydel = False
         self.startButton.setEnabled(False)
         self.tableWidget.clear()
         # try:
         self.confirmflag = False
         self.CMDBrowser.append("开始检查...")
-        if self.renameCheckBox.isChecked():
+        if self.renameEpisodeCheckBox.isChecked():
             if self.subpathEdit.text() != '':
                 logger.info('check: renamemode')
                 episodelist = self.showEpisodeInfo()
@@ -676,6 +667,9 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                     self.commandstrlist = episodelist
             else:
                 self.CMDBrowser.append("剧名为空，请在字幕路径中输入...")
+
+        elif self.renameSubCheckBox.isChecked():
+            self.renameSub()
         else:
             commandalllist = self.commandCombin()
             if not self.errflag:
@@ -688,18 +682,25 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                     self.filepath = self.filepathEdit.text()
                     if self.filepath != '' and os.path.exists(self.filepath):
                         alllist = []
-                        self.subfiletype = self.subfiletypeBox.currentText()
                         onlyfiles = [f for f in listdir(self.filepath) if isfile(join(self.filepath, f))]
                         if len(onlyfiles) != 0:
+                            renamelist = []
                             for file in onlyfiles:
                                 if " (1).mkv" in file:
                                     alllist.append(file)
                                     removefile = file.replace(' (1)', '')
-                                    self.CMDBrowser.append(file + ' --> ' + removefile)
+                                    renamelist.append([file, removefile])
+                                    self.showCommand(renamelist)
+                                    # self.CMDBrowser.append(file + ' --> ' + removefile)
+                            removelist = []
                             for file in onlyfiles:
                                 if "." + self.subfiletype in file:
                                     alllist.append(file)
-                                    self.CMDBrowser.append(file)
+                                    removelist.append(file)
+                            if len(removelist) != 0:
+                                self.CMDBrowser.append('删除字幕如下：')
+                                for sub in removelist:
+                                    self.CMDBrowser.append(sub)
                             if len(alllist) != 0:
                                 self.startButton.setEnabled(True)
                                 self.commandstrlist = []
@@ -729,14 +730,12 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
             commandall = self.commandstrlist
             logger.info('run: commandstrlist: {}'.format(commandall))
             self.filepath = self.filepathEdit.text()
-            self.subfiletype = '.' + self.subfiletypeBox.currentText()
             if not self.errflag:
                 self.startButton.setEnabled(False)
                 self.checkButton.setEnabled(False)
-                print(1111111111111111)
                 self.t1 = Starthread(commandstrlist=self.commandstrlist, filepath=self.filepath,
-                                     subfiletype=self.subfiletype,
-                                     renameCheckBox=self.renameCheckBox, delCheckBox=self.delCheckBox)
+                                     subfiletype='.' + self.subfiletype,
+                                     renameEpisodeCheckBox=self.renameEpisodeCheckBox, delCheckBox=self.delCheckBox)
                 self.t1._signal.connect(self.set_btn)
                 self.t1.start()
                 self.t1.trigger.connect(self.display)
@@ -764,7 +763,6 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
             if self.filter_1(i, keyword):
                 continue
             filterlist.append(i)
-        # print("filterlist", filterlist)
         return filterlist
     """
     关键字过滤
@@ -779,12 +777,19 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
 
     """
     按集数
-    :rstlist: 
+    : rstlist: 初始和检索后字典
+    : filelist: 需要匹配的文件列表
+    : rstname: 需要匹配的名字
+    : rstpath: 需要匹配的文件路径
     """
-    def gettogether(self, rstlist, filelist, rstname, rstpath, rex, rex_1):
+    def gettogether(self, rstlist, filelist, rstname, rstpath, rex, rex_1, filetype):
         allnum = len(rstlist)
+        # print(allnum)
         countrstfile = 0
-        for num in range(1, (allnum + 1)*2):
+        if rex_1 == '':
+            rstlist = self.gettogether_1(rstlist, filelist, rstname, rstpath, filetype)
+            return self.gettogether_1(rstlist, filelist, rstname, rstpath, filetype)
+        for num in range(self.initepisode, allnum + self.initepisode+1):
             number = str(num).rjust(2, '0')
             number_1 = rex.replace('$', number)
             for filedict in rstlist:
@@ -795,9 +800,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                     number_2 = rex_1.replace('$', number)
                     for file in filelist:
                         fileUpper = file.upper()
-                        print(fileUpper)
                         if number_2 in fileUpper:
-                            print(number_2)
                             rst = file
                             filedict.update({rstname: file})
                             rst = os.path.join(rstpath, rst)
@@ -815,26 +818,24 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
     """
     按名字
     """
-    def gettogether_1(self, rstlist, sublist):
+    def gettogether_1(self, rstlist, filelist, rstname, rstpath, filetype):
         countrstfile = 0
         for filedict in rstlist:
-            filename = filedict['filename'].replace('.mkv', '')
-            for sub in sublist:
-                if filename in sub:
+            filename = filedict['filename'].replace('.' + filetype, '')
+            for file in filelist:
+                if filename in file:
                     countrstfile += 1
-                    subname = sub
-                    subnamepath = os.path.join(self.subpath, subname)
-                    subnamepath = '"' + subnamepath + '"'
-                    filedict.update({'subname': sub,
-                                'subnamepath': subnamepath})
-
+                    filenamepath = os.path.join(rstpath, file)
+                    filenamepath = '"' + filenamepath + '"'
+                    filedict.update({rstname: file,
+                                     rstname+'path': filenamepath})
                     break
-        rstlist = [item for item in rstlist if 'subnamepath' in item]
+        rstlist = [item for item in rstlist if rstname in item]
 
         if countrstfile == 0:
             self.errflag = True
             self.CMDBrowser.clear()
-            self.CMDBrowser.append('未能匹配到subname文件，请检查检索方式是否正确')
+            self.CMDBrowser.append('未能匹配到{}文件，请检查检索方式是否正确'.format(rstname))
         return rstlist
 
     """
@@ -843,6 +844,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
     def gettogether_2(self, filelist, rex):
         reslist = []
         allnum = len(filelist)
+        print('gettogether_2', allnum)
         res = {'filename': 'Na',
                'filepathname': 'Na',
                'outputpathname': 'Na'
@@ -859,13 +861,13 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                             'outputpathname': outputpathname})
                 reslist.append(res.copy())
         else:
-            for num in range(1, allnum + 1):
+            for num in range(self.initepisode, allnum + self.initepisode+1):
                 number = str(num).rjust(2, '0')
+                print(number)
                 number_1 = rex.replace('$', number)
-                print(number_1)
                 for file in filelist:
                     fileUpper = file.upper()
-                    if number_1 in fileUpper :
+                    if number_1 in fileUpper:
                         filepathname = os.path.join(self.filepath, file)
                         filepathname = '"' + filepathname + '"'
                         outputname = file.replace('.mkv', ' (1).mkv')
@@ -883,12 +885,12 @@ class Starthread(QThread):
     trigger = pyqtSignal(str)
     _signal = pyqtSignal()
 
-    def __init__(self, commandstrlist, filepath, subfiletype, renameCheckBox, delCheckBox, parent=None):
+    def __init__(self, commandstrlist, filepath, subfiletype, renameEpisodeCheckBox, delCheckBox, parent=None):
         QThread.__init__(self, parent)
         self.commandstrlist = commandstrlist
         self.filepath = filepath
         self.subfiletype = subfiletype
-        self.renameCheckBox = renameCheckBox
+        self.renameEpisodeCheckBox = renameEpisodeCheckBox
         self.delCheckBox = delCheckBox
 
     def commandSplicing(self, cmdlist):
@@ -901,7 +903,7 @@ class Starthread(QThread):
     def run(self):
         qmut_1.lock()
         self.trigger.emit("开始")
-        if self.renameCheckBox.isChecked():
+        if self.renameEpisodeCheckBox.isChecked():
             self.rename(self.commandstrlist)
         else:
             count = len(self.commandstrlist)
@@ -919,7 +921,6 @@ class Starthread(QThread):
                 self.trigger.emit("已全部完成")
 
             if self.delCheckBox.isChecked():
-                self.trigger.emit('1111111111111111111')
                 self.remove(self.filepath)
         qmut_1.unlock()
         self._signal.emit()
