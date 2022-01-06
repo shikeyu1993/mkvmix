@@ -9,7 +9,7 @@ logging.basicConfig(level=log_level,
                     format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s',
                     datefmt='%m-%d %H:%M:%S',
                     filename=TOOLLOGPATH,
-                    filemode='a')
+                    filemode='w')
 console = logging.StreamHandler()
 console.setLevel(log_level)
 formatter = logging.Formatter(
