@@ -337,7 +337,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                 self.errflag = True
                 self.CMDBrowser.append("未找到{}格式视频".format(self.filetype))
             else:
-                reslist = self.gettogether_2(filelist, self.filerex)
+                reslist = self.gettogether_2(filelist, self.filetype, self.filerex)
                 logger.info('fileFilter: "reslist":{}'.format(reslist))
                 if len(reslist) == 0:
                     self.errflag = True
@@ -903,7 +903,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
     """
     处理源文件
     """
-    def gettogether_2(self, filelist, rex):
+    def gettogether_2(self, filelist, filetype, rex):
         reslist = []
         allnum = len(filelist)
         res = {'filename': 'Na',
@@ -914,7 +914,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
             for file in filelist:
                 filepathname = os.path.join(self.filepath, file)
                 filepathname = '"' + filepathname + '"'
-                outputname = file.replace('.mkv', ' (1).mkv')
+                outputname = file.replace('.' + filetype, ' (1).mkv')
                 outputpathname = os.path.join(self.filepath, outputname)
                 outputpathname = '"' + outputpathname + '"'
                 res.update({'filename': file,
@@ -930,7 +930,7 @@ class MkvMixMain(QMainWindow,Ui_MainWindow):
                     if number_1 in fileUpper:
                         filepathname = os.path.join(self.filepath, file)
                         filepathname = '"' + filepathname + '"'
-                        outputname = file.replace('.mkv', ' (1).mkv')
+                        outputname = file.replace('.' + filetype, ' (1).mkv')
                         outputpathname = os.path.join(self.filepath, outputname)
                         outputpathname = '"' + outputpathname + '"'
                         res.update({'filename': file,
